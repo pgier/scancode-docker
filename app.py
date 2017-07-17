@@ -2,6 +2,7 @@
 from flask import Flask, request, Response, json
 from urlparse import urlparse
 import os
+import shutil
 import subprocess
 import tempfile
 
@@ -30,13 +31,14 @@ def scan_project():
 
     license_info_filename = CACHE_DIR + '/' + get_project_name(source_url) + "-" + commit_id + ".json"
     if not os.path.exists(license_info_filename):
-        git_repo_dir, result = git_clone(source_url, commit_id)
+        git_repo_temp_dir, result = git_clone(source_url, commit_id)
         if result != 0:
             return "Error cloning git repo"
-        result = git_checkout(git_repo_dir, commit_id)
+        result = git_checkout(git_repo_temp_dir, commit_id)
         if result != 0:
             return "Error checking out commit"
-        run_scancode(git_repo_dir, license_info_filename)
+        run_scancode(git_repo_temp_dir, license_info_filename)
+        shutil.rmtree(git_repo_temp_dir, ignore_errors=True)
 
     with open(license_info_filename) as scancode_output:
         scancode_result = json.load(scancode_output)
