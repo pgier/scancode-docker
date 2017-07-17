@@ -55,6 +55,7 @@ def git_clone(source_url, commit):
 def get_project_name(source_url):
     parsed_url = urlparse(source_url)
     _, project_name = os.path.split(parsed_url.path)
+    project_name = os.path.splitext(project_name)[0]
     return project_name
 
 
