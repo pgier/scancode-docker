@@ -27,16 +27,18 @@ def scan_project():
     commit_id = request_data["commit_id"]
     if source_url == '' or commit_id == '':
         return display_help()
-    git_repo_dir, result = git_clone(source_url, commit_id)
-    if result != 0:
-        return "Error cloning git repo"
-    result = git_checkout(git_repo_dir, commit_id)
-    if result != 0:
-        return "Error checking out commit"
-    output_filename = get_project_name(source_url) + "-" + commit_id + ".json"
-    run_scancode(git_repo_dir, output_filename)
 
-    with open(output_filename) as scancode_output:
+    license_info_filename = CACHE_DIR + '/' + get_project_name(source_url) + "-" + commit_id + ".json"
+    if not os.path.exists(license_info_filename):
+        git_repo_dir, result = git_clone(source_url, commit_id)
+        if result != 0:
+            return "Error cloning git repo"
+        result = git_checkout(git_repo_dir, commit_id)
+        if result != 0:
+            return "Error checking out commit"
+        run_scancode(git_repo_dir, license_info_filename)
+
+    with open(license_info_filename) as scancode_output:
         scancode_result = json.load(scancode_output)
     return Response(json.dumps(scancode_result), mimetype='application/json')
 
