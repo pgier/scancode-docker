@@ -1,5 +1,5 @@
 
-from flask import Flask, request, Response, json
+from flask import Flask, request, Response
 from urlparse import urlparse
 import os
 import shutil
@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 
 CACHE_DIR = '/app/cache'
+DEFAULT_RESULT_FORMAT = 'json'
 
 if not os.path.exists(CACHE_DIR):
     os.makedirs(CACHE_DIR)
@@ -23,13 +24,23 @@ def handle_get():
 def scan_project():
     if not request.is_json:
         return "Post data must be json format"
-    request_data = request.get_json()
-    source_url = request_data["source_url"]
-    commit_id = request_data["commit_id"]
-    if source_url == '' or commit_id == '':
-        return display_help()
 
-    license_info_filename = CACHE_DIR + '/' + get_project_name(source_url) + "-" + commit_id + ".json"
+    request_data = request.get_json()
+
+    if 'source_url' not in request_data:
+        return display_help()
+    source_url = request_data['source_url']
+
+    if 'commit_id' not in request_data:
+        return display_help()
+    commit_id = request_data['commit_id']
+
+    format_param = DEFAULT_RESULT_FORMAT
+    if 'format' in request_data:
+        format_param = request_data['format']
+
+    license_info_filename = CACHE_DIR + '/' + get_project_name(source_url) + "-" + commit_id \
+                            + "." + format_param
     if not os.path.exists(license_info_filename):
         git_repo_temp_dir, result = git_clone(source_url, commit_id)
         if result != 0:
@@ -37,12 +48,19 @@ def scan_project():
         result = git_checkout(git_repo_temp_dir, commit_id)
         if result != 0:
             return "Error checking out commit"
-        run_scancode(git_repo_temp_dir, license_info_filename)
+        run_scancode(git_repo_temp_dir, license_info_filename, format_param)
         shutil.rmtree(git_repo_temp_dir, ignore_errors=True)
 
-    with open(license_info_filename) as scancode_output:
-        scancode_result = json.load(scancode_output)
-    return Response(json.dumps(scancode_result), mimetype='application/json')
+    with open(license_info_filename, "r") as license_info_file:
+        license_info = license_info_file.readlines()
+
+    mimetype = 'text/plain'
+    if format_param == 'json' or format_param == 'json-pp':
+        mimetype = 'application/json'
+    elif format_param == 'html':
+        mimetype = 'text/html'
+
+    return Response(license_info, mimetype=mimetype)
 
 
 def display_help():
@@ -67,8 +85,8 @@ def git_checkout(repo_dir, commit):
     return subprocess.call(['git', 'checkout', commit], cwd=repo_dir)
 
 
-def run_scancode(source_dir, output_file):
-    return subprocess.call(["scancode", "--format", "json", source_dir, output_file])
+def run_scancode(source_dir, output_file, format_param):
+    return subprocess.call(["scancode", "--format", format_param, source_dir, output_file])
 
 
 if __name__ == '__main__':
